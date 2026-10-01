@@ -1,0 +1,55 @@
+{
+  "name": "euvica-terminal",
+  "version": "1.2.0",
+  "description": "Euvica Ingame Terminal für ETS 2",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ognisab/euvica-terminal.git"
+  },
+  "devDependencies": {
+    "electron": "^29.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.euvica.terminal",
+    "productName": "Euvica Terminal",
+    "win": {
+      "target": "nsis",
+      "icon": "logo.ico"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ognisab",
+        "repo": "euvica-terminal"
+      }
+    ],
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "guid": "euvica-terminal-guid",
+      "include": "installer.nsh"
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "package.json",
+      "logo.ico",
+      "phone-frame-landscape.png"
+    ]
+  },
+  "dependencies": {
+    "electron-context-menu": "^5.1.0",
+    "electron-updater": "^6.8.9"
+  }
+}

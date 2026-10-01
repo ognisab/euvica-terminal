@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Euvica Ingame Overlay</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            background: transparent;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* Textfelder und Inputs erlauben Markieren & Copy/Paste */
+        input, textarea, select {
+            user-select: text !important;
+            -webkit-user-select: text !important;
+        }
+
+        /* Der Smartphone-Rahmen im Querformat */
+        #phone-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-image: url('./phone-frame-landscape.png'); 
+            background-size: 100% 100%;
+            background-repeat: no-repeat;
+            box-sizing: border-box;
+            padding: 25px 85px 20px 85px; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #overlay-ui {
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+            background-color: rgba(11, 74, 109, 0.95); /* Euvica-Dunkelblau */
+            border: 2px solid #43c0ab;
+            border-radius: 4px;
+            padding: 8px 12px;
+            color: white;
+            display: block; 
+            overflow: hidden; 
+        }
+
+        h1 {
+            margin-top: 0;
+            margin-bottom: 6px;
+            text-align: center;
+            border-bottom: 1px solid #43c0ab;
+            padding-bottom: 4px;
+            font-size: 16px;
+            user-select: none;
+            -webkit-app-region: drag;
+        }
+        
+        button, input, select, .tabs {
+            -webkit-app-region: no-drag;
+        }
+
+        .tabs {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .tab-btn {
+            background-color: #1a2634;
+            color: #aaa;
+            border: 1px solid #43c0ab;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 11px;
+        }
+
+        .tab-btn.active {
+            background-color: #43c0ab;
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .tour-card {
+            background-color: rgba(26, 38, 52, 0.9); 
+            border-left: 4px solid #43c0ab;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+
+        .tour-title {
+            font-weight: bold;
+            font-size: 13px;
+            color: #43c0ab;
+            margin-bottom: 3px;
+        }
+
+        .tour-details {
+            font-size: 12px;
+            color: #ddd;
+            line-height: 1.3;
+        }
+
+        button {
+            background-color: #0b4a6d;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background-color: #43c0ab;
+        }
+
+        .success-btn {
+            background-color: #28a745;
+            width: 100%;
+            font-weight: bold;
+            margin-top: 5px;
+            padding: 6px;
+        }
+
+        .success-btn:hover {
+            background-color: #218838;
+        }
+
+        .close-btn {
+            background-color: #a83232;
+            padding: 4px 12px;
+            font-size: 11px;
+        }
+        
+        .close-btn:hover {
+            background-color: #d14747;
+        }
+
+        /* Popup für neu zugewiesene Folgeaufträge im Overlay */
+        #auftrag-popup {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(11, 74, 109, 0.98);
+            border: 2px solid #28a745;
+            padding: 15px;
+            border-radius: 6px;
+            z-index: 10000;
+            width: 280px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.7);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="phone-container">
+        <!-- Overlay Popup für neue Aufträge -->
+        <div id="auftrag-popup">
+            <h3 style="margin-top:0; color: #28a745; font-size: 14px; border-bottom: 1px solid #43c0ab; padding-bottom: 4px;">🚚 Neuer Folgeauftrag!</h3>
+            <div style="font-size: 11px; color: #ddd; line-height: 1.4; margin-bottom: 10px;">
+                • <strong>Titel:</strong> <span id="popup-titel">-</span><br>
+                • <strong>Start:</strong> <span id="popup-start">-</span><br>
+                • <strong>Ziel:</strong> <span id="popup-ziel">-</span><br>
+                • <strong>Fracht:</strong> <span id="popup-fracht">-</span>
+            </div>
+            <button class="success-btn" id="btn-overlay-annehmen">Tour annehmen</button>
+        </div>
+
+        <div id="overlay-ui">
+            <h1 id="drag-handle">🚛 Euvica Bordcomputer</h1>
+            
+            <!-- Navigation -->
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('tanken', this)">⛽ Tanken & Wäsche</button>
+                <button class="tab-btn" onclick="switchTab('dispo', this)">📋 Dispo & Aufträge</button>
+                <button class="tab-btn" onclick="switchTab('booking', this)">🏨 Hotel & Fähren</button>
+                <button class="tab-btn" onclick="switchTab('settings', this)">⚙ Einstellungen</button>
+            </div>
+
+            <!-- Tab 1: Fast-Track Tanken & Waschen -->
+            <div id="tab-tanken" class="tab-content active">
+                <p style="text-align: center; color: #ddd; font-size: 13px; margin-top: 0;">Erfasse hier schnell deinen Tankstopp für die Logistik.</p>
+                
+                <div style="margin-bottom: 10px;">
+                    <label style="font-size: 12px; color: #43c0ab; font-weight: bold;">⛽ Getankte Liter:</label>
+                    <input type="number" id="fast-tank-liter" placeholder="z.B. 450" style="width: 100%; padding: 6px; margin-top: 3px; background: #1a2634; color: white; border: 1px solid #43c0ab; border-radius: 4px; box-sizing: border-box;">
+                </div>
+                
+                <div style="margin-bottom: 10px;">
+                    <label style="font-size: 12px; color: #43c0ab; font-weight: bold;">📍 Ort / Tankstelle (Optional):</label>
+                    <input type="text" id="fast-tank-ort" placeholder="z.B. Frankfurt Autohof" style="width: 100%; padding: 6px; margin-top: 3px; background: #1a2634; color: white; border: 1px solid #43c0ab; border-radius: 4px; box-sizing: border-box;">
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <label style="font-size: 12px; color: #43c0ab; font-weight: bold;">🧼 Lkw-Wäsche (Optional):</label>
+                    <select id="fast-tank-waesche" style="width: 100%; padding: 6px; margin-top: 3px; background: #1a2634; color: white; border: 1px solid #43c0ab; border-radius: 4px; box-sizing: border-box;">
+                        <option value="none">❌ Keine Wäsche</option>
+                        <option value="sys_wash_express">🧽 Express-Wäsche (Nur Außen)</option>
+                        <option value="sys_wash_standard">🧼 Standard-Wäsche (Außen + Unterboden)</option>
+                        <option value="sys_wash_premium">✨ Premium-Komplettpflege</option>
+                    </select>
+                </div>
+                
+                <button class="success-btn" onclick="sendFastTanken()">🚚 Daten übermitteln & Beleg drucken</button>
+            </div>
+
+            <!-- Tab 2: Dispo & Folgeauftrag -->
+            <div id="tab-dispo" class="tab-content">
+                <div class="tour-card">
+                    <div class="tour-title" id="dispo-tour-titel">Lade aktive Tour...</div>
+                    <div class="tour-details">
+                        • <strong>Start:</strong> <span id="dispo-start">-</span><br>
+                        • <strong>Ziel:</strong> <span id="dispo-ziel">-</span><br>
+                        • <strong>Fracht:</strong> <span id="dispo-fracht">-</span><br>
+                        • <strong>Status:</strong> <span style="color: #f0ad4e;" id="tour-status">● Wird geladen</span>
+                    </div>
+                </div>
+
+                <button class="success-btn" style="background-color: #3b82f6; margin-bottom: 6px;" onclick="markAsDelivered()">✅ Tour als "Abgeliefert" markieren</button>
+
+                <div style="margin-bottom: 6px;">
+                    <label style="font-size: 11px; color: #43c0ab; font-weight: bold;">📍 Aktueller Standort (für Folgeauftrag):</label>
+                    <input type="text" id="current-location" placeholder="z.B. Frankfurt am Main" style="width: 100%; padding: 5px; margin-top: 2px; background: #1a2634; color: white; border: 1px solid #43c0ab; border-radius: 4px; box-sizing: border-box; font-size: 12px;">
+                </div>
+
+                <button class="success-btn" onclick="requestFollowUpTour()">🚚 Folgeauftrag bei Dispo anfordern</button>
+            </div>
+
+            <!-- Tab 3: Hotel & Fähren (Kombiniert) -->
+            <div id="tab-booking" class="tab-content">
+                <p style="text-align: center; color: #ddd; font-size: 11px; margin-top: 0; margin-bottom: 4px;">Buche Raststätten, Hotels oder Fährtickets für deine Tour.</p>
+                
+                <div style="display: flex; gap: 8px;">
+                    <!-- Hotel Sektion -->
+                    <div style="flex: 1; background: rgba(26, 38, 52, 0.9); border: 1px solid #43c0ab; padding: 6px; border-radius: 4px;">
+                        <div style="font-weight: bold; font-size: 11px; color: #43c0ab; margin-bottom: 4px;">🏨 Hotel / Raststätte</div>
+                        <input type="text" id="hotel-city" placeholder="Stadt (z.B. Genua)" style="width: 100%; padding: 4px; margin-bottom: 4px; background: #1a2634; color: white; border: 1px solid #43c0ab; border-radius: 3px; font-size: 11px; box-sizing: border-box;">
+                        <select id="hotel-class" style="width: 100%; padding: 4px; margin-bottom: 4px; background: #1a2634; color: white; border: 1px solid #43c0ab; border-radius: 3px; font-size: 11px; box-sizing: border-box;">
+                            <option value="premium">⭐ Premium Lounge</option>
+                            <option value="standard" selected>🚛 Standard Autohof</option>
+                            <option value="pension">🏚️ Günstige Pension</option>
+                        </select>
+                        <button class="success-btn" style="padding: 4px; font-size: 11px; margin-top: 0;" onclick="bookHotel()">Hotel buchen</button>
+                    </div>
+
+                    <!-- Fähr Sektion -->
+                    <div style="flex: 1; background: rgba(26, 38, 52, 0.9); border: 1px solid #43c0ab; padding: 6px; border-radius: 4px;">
+                        <div style="font-weight: bold; font-size: 11px; color: #43c0ab; margin-bottom: 4px;">🚢 Fährticket</div>
+                        <select id="ferry-route" style="width: 100%; padding: 4px; margin-bottom: 4px; background: #1a2634; color: white; border: 1px solid #43c0ab; border-radius: 3px; font-size: 11px; box-sizing: border-box;">
+                            <optgroup label="1. Hauptspiel (Vanilla)">
+                                <option value="Calais-Dover">Calais ↔ Dover</option>
+                                <option value="Rotterdam-Harwich">Rotterdam ↔ Harwich</option>
+                                <option value="Rotterdam-Hull">Rotterdam ↔ Hull</option>
+                                <option value="IJmuiden-Newcastle">IJmuiden ↔ Newcastle</option>
+                            </optgroup>
+                            <optgroup label="2. Skandinavien">
+                                <option value="Hirtshals-Kristiansand">Hirtshals ↔ Kristiansand</option>
+                                <option value="Hirtshals-Stavanger">Hirtshals ↔ Stavanger</option>
+                                <option value="Hirtshals-Bergen">Hirtshals ↔ Bergen</option>
+                                <option value="Frederikshavn-Goteborg">Frederikshavn ↔ Göteborg</option>
+                                <option value="Gedser-Rostock">Gedser ↔ Rostock</option>
+                                <option value="Esbjerg-Hull">Esbjerg ↔ Hull</option>
+                            </optgroup>
+                            <optgroup label="3. Jenseits der Ostsee">
+                                <option value="Travemuende-Liepaja">Travemünde ↔ Liepāja</option>
+                                <option value="Travemuende-Helsinki">Travemünde ↔ Helsinki</option>
+                                <option value="Nynashamn-Ventspils">Nynäshamn ↔ Ventspils</option>
+                                <option value="Kapellskar-Naantali-Turku">Kapellskär ↔ Naantali / Turku</option>
+                                <option value="Kapellskar-Paldiski">Kapellskär ↔ Paldiski</option>
+                                <option value="Tallinn-Helsinki">Tallinn ↔ Helsinki</option>
+                            </optgroup>
+                            <optgroup label="4. Italien & Frankreich">
+                                <option value="Marseille-Ajaccio">Marseille ↔ Korsika</option>
+                                <option value="Marseille-Sassari">Marseille ↔ Sardinien</option>
+                                <option value="Genua-Palermo">Genua ↔ Palermo</option>
+                                <option value="VillaSanGiovanni-Messina">Villa San Giovanni ↔ Messina</option>
+                                <option value="Neapel-Palermo">Neapel ↔ Palermo</option>
+                                <option value="Roscoff-Plymouth">Roscoff ↔ Plymouth</option>
+                            </optgroup>
+                            <optgroup label="5. Westbalkan">
+                                <option value="Triest-Durres">Triest ↔ Durrës</option>
+                                <option value="Triest-Split">Triest ↔ Split</option>
+                                <option value="Ancona-Split">Ancona ↔ Split</option>
+                                <option value="Ancona-Durres">Ancona ↔ Durrës</option>
+                                <option value="Bari-Durres">Bari ↔ Durrës</option>
+                            </optgroup>
+                            <optgroup label="6. Schwarzes Meer & Griechenland">
+                                <option value="Braila-Smardan">Braila ↔ Smardan (Fluss)</option>
+                                <option value="Italien-Igoumenitsa">Italien ↔ Igoumenitsa</option>
+                            </optgroup>
+                        </select>
+                        <select id="ferry-cabin" style="width: 100%; padding: 4px; margin-bottom: 4px; background: #1a2634; color: white; border: 1px solid #43c0ab; border-radius: 3px; font-size: 11px; box-sizing: border-box;">
+                            <option value="STANDARD">🎫 Standard Passage</option>
+                            <option value="PREMIUM">🛌 Premium (Kabine)</option>
+                        </select>
+                        <button class="success-btn" style="padding: 4px; font-size: 11px; margin-top: 0; background-color: #3b82f6;" onclick="bookFerry()">Fähre buchen</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 4: Einstellungen -->
+            <div id="tab-settings" class="tab-content">
+                <p style="text-align: center; color: #ddd; font-size: 13px; margin-top: 0;">Konfiguriere hier deine persönlichen Zugangsdaten & Hotkeys.</p>
+                
+                <div style="margin-bottom: 10px;">
+                    <label style="font-size: 12px; color: #43c0ab; font-weight: bold;">🆔 Discord User-ID:</label>
+                    <input type="text" id="cfg-user-id" placeholder="z.B. 735479403978686505" style="width: 100%; padding: 6px; margin-top: 3px; background: #1a2634; color: white; border: 1px solid #43c0ab; border-radius: 4px; box-sizing: border-box;">
+                </div>
+
+                <div style="margin-bottom: 10px;">
+                    <label style="font-size: 12px; color: #43c0ab; font-weight: bold;">🏰 Discord Server-ID (Guild ID):</label>
+                    <input type="text" id="cfg-guild-id" placeholder="z.B. 735921191453196289" style="width: 100%; padding: 6px; margin-top: 3px; background: #1a2634; color: white; border: 1px solid #43c0ab; border-radius: 4px; box-sizing: border-box;">
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <label style="font-size: 12px; color: #43c0ab; font-weight: bold;">⌨️ Öffnungs-Tastenkombination:</label>
+                    <input type="text" id="cfg-shortcut" readonly placeholder="Klicken & gewünschte Taste drücken" style="width: 100%; padding: 6px; margin-top: 3px; background: #1a2634; color: white; border: 1px solid #43c0ab; border-radius: 4px; box-sizing: border-box; cursor: pointer;">
+                </div>
+
+                <button class="success-btn" onclick="saveSettings()">💾 Einstellungen speichern</button>
+            </div>
+
+            <div style="margin-top: 15px; text-align: center;">
+                <button class="close-btn" id="btnClose" onclick="closeOverlay()">❌ Schließen</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const { ipcRenderer } = require('electron');
+    const shortcutInput = document.getElementById('cfg-shortcut');
+
+    // Live-Erfassung der gedrückten Taste
+    shortcutInput.addEventListener('keydown', (e) => {
+        e.preventDefault();
+        
+        let keys = [];
+        if (e.ctrlKey) keys.push('Control');
+        if (e.altKey) keys.push('Alt');
+        if (e.shiftKey) keys.push('Shift');
+        
+        let keyName = e.key;
+        if (e.code.startsWith('F') && !isNaN(e.code.substring(1))) {
+            keyName = e.code; 
+        } else if (keyName === ' ') {
+            keyName = 'Space';
+        } else if (keyName.length === 1) {
+            keyName = keyName.toUpperCase();
+        }
+
+        if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+
+        if (keys.length > 0) {
+            keys.push(keyName);
+            shortcutInput.value = keys.join('+');
+        } else {
+            shortcutInput.value = keyName;
+        }
+    });
+
+    let currentConfig = { user_id: "", guild_id: "", shortcut: "Alt+X" };
+
+    // Direkt beim Laden synchron aus der AppData-JSON auslesen und Fokus erzwingen
+    window.addEventListener('DOMContentLoaded', () => {
+        try {
+            currentConfig = ipcRenderer.sendSync('get-config-sync');
+            document.getElementById('cfg-user-id').value = currentConfig.user_id || '';
+            document.getElementById('cfg-guild-id').value = currentConfig.guild_id || '';
+            shortcutInput.value = currentConfig.shortcut || 'Alt+X';
+            
+            loadActiveTour(); 
+            startTourPolling(); 
+        } catch (err) {
+            console.error("Fehler beim Laden:", err);
+        }
+    });
+
+    // NEU: Sofortigen Fokus auf Eingabefelder sicherstellen, wenn das Fenster eingeblendet wird oder geklickt wird
+    window.addEventListener('focus', () => {
+        const activeTabInput = document.querySelector('.tab-content.active input');
+        if (activeTabInput) {
+            activeTabInput.focus();
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
+            e.target.focus();
+        }
+    });
+
+    function saveSettings() {
+        const userId = document.getElementById('cfg-user-id').value.trim();
+        const guildId = document.getElementById('cfg-guild-id').value.trim();
+        const shortcut = shortcutInput.value.trim();
+
+        if (!userId || !guildId || !shortcut) {
+            alert('⚠ Bitte fülle alle Felder aus!');
+            return;
+        }
+
+        currentConfig = {
+            user_id: userId,
+            guild_id: guildId,
+            shortcut: shortcut
+        };
+
+        const success = ipcRenderer.sendSync('save-config-sync', currentConfig);
+        if (success) {
+            alert('✅ Einstellungen erfolgreich gespeichert und Hotkey aktiv!');
+            loadActiveTour(); 
+        } else {
+            alert('❌ Fehler beim Speichern der Konfigurationsdatei.');
+        }
+    }
+
+    function getUserConfig() {
+        return {
+            guild_id: currentConfig.guild_id || "",
+            user_id: currentConfig.user_id || ""
+        };
+    }
+
+    ipcRenderer.on('toggle-ui', (event, isActive) => {
+        const uiElement = document.getElementById('phone-container');
+        if (isActive) {
+            uiElement.style.display = 'block';
+            loadActiveTour();
+            // Automatisch Fokus auf das erste Eingabefeld im aktiven Tab legen
+            setTimeout(() => {
+                const activeInput = document.querySelector('.tab-content.active input');
+                if (activeInput) activeInput.focus();
+            }, 100);
+        } else {
+            uiElement.style.display = 'none';
+        }
+    });
+
+    function closeOverlay() {
+        ipcRenderer.send('close-overlay');
+    }
+
+    function switchTab(tabName, btnElement) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+
+        const targetContent = document.getElementById('tab-' + tabName);
+        if (targetContent) {
+            targetContent.classList.add('active');
+            // Direkt beim Tab-Wechsel das erste Input-Fokusieren
+            const firstInput = targetContent.querySelector('input');
+            if (firstInput) {
+                setTimeout(() => firstInput.focus(), 50);
+            }
+        }
+        if (btnElement) btnElement.classList.add('active');
+    }
+
+    // --- LIVE-ÜBERWACHUNG (Polling alle 10 Sekunden) ---
+    let tourPollingInterval = null;
+
+    function startTourPolling() {
+        if (tourPollingInterval) clearInterval(tourPollingInterval);
+        
+        tourPollingInterval = setInterval(() => {
+            const uiElement = document.getElementById('phone-container');
+            if (uiElement && uiElement.style.display !== 'none') {
+                loadActiveTour();
+                checkForNewJob(); 
+            }
+        }, 10000); 
+    }
+
+    async function checkForNewJob() {
+        const config = getUserConfig();
+        if (!config.user_id || !config.guild_id) return;
+
+        const railwayUrl = 'https://discordbotdispo-production.up.railway.app/api/neuer-auftrag';
+
+        try {
+            let response = await fetch(railwayUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+
+            let result = await response.json();
+            const popup = document.getElementById('auftrag-popup');
+
+            if (result.success && result.job) {
+                document.getElementById('popup-titel').innerText = result.job.titel;
+                document.getElementById('popup-start').innerText = result.job.start;
+                document.getElementById('popup-ziel').innerText = result.job.ziel;
+                document.getElementById('popup-fracht').innerText = result.job.fracht;
+                
+                popup.style.display = 'block';
+            } else {
+                popup.style.display = 'none';
+            }
+        } catch (err) {
+            console.error("Fehler beim Prüfen auf neuen Auftrag:", err);
+        }
+    }
+
+    document.getElementById('btn-overlay-annehmen').addEventListener('click', async () => {
+        const config = getUserConfig();
+        const railwayUrl = 'https://discordbotdispo-production.up.railway.app/api/tour-annehmen';
+
+        try {
+            let response = await fetch(railwayUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+
+            let result = await response.json();
+            if (result.success) {
+                alert('✅ Tour erfolgreich übernommen! Status im Forum auf "Auf Achse" gewechselt.');
+                document.getElementById('auftrag-popup').style.display = 'none';
+                loadActiveTour(); 
+                switchTab('dispo', document.querySelector('.tab-btn:nth-child(2)')); 
+            } else {
+                alert('❌ Fehler: ' + result.error);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('⚠️ Verbindung zum Server fehlgeschlagen.');
+        }
+    });
+
+    async function loadActiveTour() {
+        const config = getUserConfig();
+        if (!config.user_id || !config.guild_id) {
+            document.getElementById('dispo-tour-titel').innerText = "Bitte ID in den Einstellungen hinterlegen";
+            return;
+        }
+
+        const railwayUrl = 'https://discordbotdispo-production.up.railway.app/api/aktuelle-tour';
+
+        try {
+            let response = await fetch(railwayUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+
+            let result = await response.json();
+            if (result.success && result.tour) {
+                document.getElementById('dispo-tour-titel').innerText = result.tour.titel;
+                document.getElementById('dispo-start').innerText = result.tour.start;
+                document.getElementById('dispo-ziel').innerText = result.tour.ziel;
+                document.getElementById('dispo-fracht').innerText = result.tour.fracht;
+                
+                const statusEl = document.getElementById('tour-status');
+                statusEl.style.color = '#28a745';
+                statusEl.innerText = '● ' + result.tour.status;
+            } else {
+                document.getElementById('dispo-tour-titel').innerText = "Keine aktive Tour";
+                document.getElementById('dispo-start').innerText = "-";
+                document.getElementById('dispo-ziel').innerText = "Bereit für neuen Auftrag";
+                document.getElementById('dispo-fracht').innerText = "-";
+                
+                const statusEl = document.getElementById('tour-status');
+                statusEl.style.color = '#f0ad4e';
+                statusEl.innerText = '● Bereit';
+            }
+        } catch (err) {
+            console.error("Fehler beim Laden der Tour:", err);
+        }
+    }
+
+    async function markAsDelivered() {
+        const config = getUserConfig();
+        if (!config.user_id) {
+            alert('⚠️ Bitte trage zuerst deine User-ID in den Einstellungen ein!');
+            return;
+        }
+
+        const railwayUrl = 'https://discordbotdispo-production.up.railway.app/api/tour-abgeliefert';
+
+        try {
+            let response = await fetch(railwayUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+
+            let result = await response.json();
+            if (result.success) {
+                alert('✅ Tour erfolgreich als abgeliefert markiert!');
+                loadActiveTour();
+            } else {
+                alert('❌ Fehler: ' + result.error);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('⚠️ Verbindung zum Railway-Server konnte nicht hergestellt werden.');
+        }
+    }
+
+    async function requestFollowUpTour() {
+        const config = getUserConfig();
+        if (!config.user_id) {
+            alert('⚠ Bitte trage zuerst deine User-ID in den Einstellungen ein!');
+            return;
+        }
+
+        const locationInput = document.getElementById('current-location');
+        const aktuellerStandort = locationInput ? locationInput.value.trim() : "";
+
+        if (!aktuellerStandort) {
+            alert('⚠️ Bitte gib deinen aktuellen Standort an, damit die Dispo weiß, wo du stehst!');
+            if (locationInput) locationInput.focus();
+            return;
+        }
+
+        const railwayUrl = 'https://discordbotdispo-production.up.railway.app/api/dispo-ticket';
+
+        try {
+            let response = await fetch(railwayUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    guild_id: config.guild_id,
+                    user_id: config.user_id,
+                    standort: aktuellerStandort 
+                })
+            });
+
+            let result = await response.json();
+            if (result.success) {
+                alert('✅ ' + result.message);
+                locationInput.value = ''; 
+                setTimeout(loadActiveTour, 2000);
+            } else {
+                alert('❌ Fehler: ' + result.error);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('⚠️ Verbindung zum Railway-Server konnte nicht hergestellt werden.');
+        }
+    }
+
+    async function sendFastTanken() {
+        const config = getUserConfig();
+        if (!config.user_id) {
+            alert('⚠ Bitte trage deine User-ID ein!');
+            return;
+        }
+
+        const literInput = document.getElementById('fast-tank-liter').value;
+        const ortInput = document.getElementById('fast-tank-ort').value || "Unbekannter Autohof";
+        const waescheInput = document.getElementById('fast-tank-waesche').value;
+
+        if (!literInput || literInput <= 0) {
+            alert('⚠️ Bitte Liter angeben!');
+            return;
+        }
+
+        const railwayUrl = 'https://kantine-bot-production.up.railway.app/api/tanken-fast'; 
+
+        try {
+            let response = await fetch(railwayUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    guild_id: config.guild_id,
+                    user_id: config.user_id,
+                    liter: parseFloat(literInput),
+                    ort: ortInput,
+                    waesche: waescheInput 
+                })
+            });
+            
+            let result = await response.json();
+            if (result.success) {
+                alert('✅ Tankvorgang erfolgreich!');
+                document.getElementById('fast-tank-liter').value = '';
+                document.getElementById('fast-tank-ort').value = '';
+                document.getElementById('fast-tank-waesche').value = 'none';
+            } else {
+                alert('❌ Fehler: ' + result.error);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('⚠️ Verbindung fehlgeschlagen.');
+        }
+    }
+
+    async function bookHotel() {
+        const config = getUserConfig();
+        if (!config.user_id || !config.guild_id) {
+            alert('⚠️ Bitte hinterlege deine User-ID & Server-ID in den Einstellungen!');
+            return;
+        }
+
+        const city = document.getElementById('hotel-city').value.trim();
+        const hotelClass = document.getElementById('hotel-class').value;
+
+        if (!city) {
+            alert('⚠️ Bitte gib eine Stadt für die Hotel-Reservierung an!');
+            return;
+        }
+
+        const railwayUrl = 'https://hotelbot-production-2a97.up.railway.app/api/hotel-buchen';
+
+        try {
+            let response = await fetch(railwayUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    guild_id: config.guild_id,
+                    user_id: config.user_id,
+                    stadt: city,
+                    klasse: hotelClass,
+                    dauer: '9 Stunden Pause'
+                })
+            });
+
+            let result = await response.json();
+            if (result.success) {
+                alert('✅ Hotel erfolgreich in ' + city + ' gebucht! Gutschein & Beleg im Discord erstellt.');
+                document.getElementById('hotel-city').value = '';
+            } else {
+                alert('❌ Fehler: ' + (result.error || 'Ausgebucht oder Systemfehler'));
+            }
+        } catch (err) {
+            console.error(err);
+            alert('⚠️ Verbindung zum Hotel-Server konnte nicht hergestellt werden.');
+        }
+    }
+
+    async function bookFerry() {
+        const config = getUserConfig();
+        if (!config.user_id || !config.guild_id) {
+            alert('⚠️️ Bitte hinterlege deine User-ID & Server-ID in den Einstellungen!');
+            return;
+        }
+
+        const route = document.getElementById('ferry-route').value;
+        const cabin = document.getElementById('ferry-cabin').value;
+
+        const railwayUrl = 'https://hotelbot-production-2a97.up.railway.app/api/faehre-buchen';
+
+        try {
+            let response = await fetch(railwayUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    guild_id: config.guild_id,
+                    user_id: config.user_id,
+                    route: route,
+                    cabin: cabin,
+                    lkw: 'Euvica-Truck',
+                    trailer: 'Kühlauflieger'
+                })
+            });
+
+            let result = await response.json();
+            if (result.success) {
+                alert('✅ Fährticket für ' + route.replace(/-/g, ' ↔ ') + ' erfolgreich gebucht!');
+            } else {
+                alert('❌ Fehler: ' + (result.error || 'Buchung fehlgeschlagen'));
+            }
+        } catch (err) {
+            console.error(err);
+            alert('⚠️ Verbindung zum Fähr-Server konnte nicht hergestellt werden.');
+        }
+    }
+</script>
+</body>
+</html>
